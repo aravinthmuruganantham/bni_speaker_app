@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timer Display</title>
+<style>
+  :root { --bg: #ffffff; --fg: #58595b; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg); overflow: hidden; display: grid; place-items: center;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; transition: background-color .25s;
+  }
+  /* idle: grey on white | go: near-black on white | last seconds: black on amber | overtime: white on BNI red, flashing */
+  body[data-phase="go"]   { --bg: #ffffff; --fg: #1f2124; }
+  body[data-phase="warn"] { --bg: #f5a300; --fg: #1a1200; }
+  body[data-phase="over"] { --bg: #cf2030; --fg: #ffffff; }
+  body[data-phase="over"][data-flash="1"] { --bg: #8f1220; transition: none; }
+  #time {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--fg);
+    font-variant-numeric: tabular-nums; white-space: nowrap; font-size: min(33vw, 58vh);
+  }
+  #time.neg { font-size: min(28vw, 58vh); }
+  #sound {
+    position: fixed; top: 2vh; right: 2vw; font: 600 clamp(12px, 1.3vw, 20px) "Helvetica Neue", Arial, sans-serif;
+    color: #fff; background: #cf2030; border-radius: 99px; padding: .55em 1.1em; transition: opacity .6s; cursor: pointer;
+  }
+  #sound.on { background: #1e8e4e; opacity: 0; }
+  #sound.on.show { opacity: 1; }
+  #paused { position: fixed; bottom: 4vh; left: 0; right: 0; text-align: center; font: 700 clamp(16px, 2.4vw, 36px) "Helvetica Neue", Arial, sans-serif; letter-spacing: .2em; color: var(--fg); opacity: .7; display: none; }
+  #offline { position: fixed; left: 50%; bottom: 1.5vh; transform: translateX(-50%); background: #1f2124; color: #fff; padding: .4em 1em; border-radius: 99px; font: 14px Arial, sans-serif; display: none; }
+</style>
+</head>
+<body data-phase="idle" data-flash="0">
+  <div id="time">00:30</div>
+  <div id="paused">PAUSED</div>
+  <div id="sound">Click for sound</div>
+  <div id="offline">Reconnecting...</div>
+
+<script src="/js/app.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  App.pollHidden = true; // projector tab must keep running even if it loses focus
+
+  // ---------- audio (browsers need one click before they allow sound) ----------
+  let ctx = null;
+  function soundOn() { return !!(ctx && ctx.state === 'running'); }
+  function unlock() {
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) {}
+    const el = $('sound');
+    if (soundOn()) {
+      el.textContent = 'Sound on';
+      if (el.className !== 'on show' && el.className !== 'on') { el.className = 'on show'; setTimeout(() => { el.className = 'on'; }, 2500); }
+    } else { el.textContent = 'Click for sound'; el.className = ''; }
+  }
+  function beep() {
+    if (!soundOn()) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.value = 988;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.22);
+  }
+  function bell() {
+    if (!soundOn()) return;
+    const t = ctx.currentTime, master = ctx.createGain();
+    master.gain.value = 0.5; master.connect(ctx.destination);
+    [[1, 1], [2.76, .55], [5.4, .3], [8.9, .15]].forEach(function (p) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 660 * p[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(p[1], t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8 / p[0] + 0.3);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 2.2);
+    });
+  }
+  ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, function () {
+    const was = soundOn(); unlock(); if (!was && soundOn()) beep();
+  }));
+  setInterval(unlock, 2000);
+
+  // fullscreen (F or double-click) + keep the laptop awake
+  function fs() { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(function () {}); }
+  document.addEventListener('keydown', e => { if (e.key === 'f' || e.key === 'F') fs(); });
+  document.addEventListener('dblclick', fs);
+  async function wake() { try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (e) {} }
+  wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+
+  // ---------- render + beep engine ----------
+  let lastK = null, lastSig = '';
+
+  function tick() {
+    const l = App.live; if (!l) return;
+    const rem = App.remaining();
+    const t = $('time');
+    t.textContent = App.fmt(rem);
+    t.className = rem <= -1000 ? 'neg' : '';
+    const k = App.overIndex();
+    document.body.dataset.phase = App.phase();
+    document.body.dataset.flash = (l.status === 'running' && k >= 0) ? String(k % 2) : '0';
+    $('paused').style.display = l.status === 'paused' ? 'block' : 'none';
+    if (lastK === null) lastK = k;                       // first load: never replay old beeps
+    else if (k > lastK) { k === 0 ? bell() : beep(); lastK = k; }
+    else lastK = k;
+  }
+
+  App.listeners.push(function (kind) {
+    if (kind === 'conn') { $('offline').style.display = App.connected ? 'none' : 'block'; return; }
+    const l = App.live, sig = [l.status, l.startedAt, l.baseElapsed, l.duration].join('|');
+    if (sig !== lastSig) { lastSig = sig; lastK = App.overIndex(); } // re-baseline only on a real change
+    tick();
+  });
+  App.start();
+  setInterval(tick, 40);
+  unlock();
+})();
+</script>
+</body>
+</html>

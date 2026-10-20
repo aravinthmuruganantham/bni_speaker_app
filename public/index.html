@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#cf2030">
+<link rel="icon" href="/icon-192.png">
+<link rel="stylesheet" href="/css/theme.css">
+<title>BNI Speaker Timer</title>
+<style>
+  .hero { background: var(--red); color: #fff; padding: 36px 20px 40px; text-align: center; }
+  .hero img { height: 44px; margin-bottom: 14px; }
+  .hero h1 { font-size: 30px; letter-spacing: .01em; }
+  .hero p { opacity: .92; margin-top: 8px; font-size: 16px; }
+  .opt { display: block; text-decoration: none; color: inherit; padding: 18px; }
+  .opt b { display: block; font-size: 19px; color: var(--red); }
+  .opt span { display: block; color: var(--mut); font-size: 14px; margin-top: 4px; }
+  .opt:hover { border-color: var(--red); }
+  .step { font-size: 13px; color: var(--mut); margin: 18px 4px 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <img src="/assets/logo.png" alt="" onerror="this.remove()">
+    <h1>Speaker Timer</h1>
+    <p>Countdown on the projector. Control from your phone.</p>
+  </div>
+  <div class="wrap">
+    <div class="step">Before the meeting</div>
+    <a class="card opt" href="/lineup"><b>Set up the lineup</b><span>Add speakers in order: name, category, company, photo.</span></a>
+    <div class="step">At the meeting</div>
+    <a class="card opt" href="/display"><b>Display mode (laptop)</b><span>Open on the laptop connected to the projector. Click once for sound, press F for full screen.</span></a>
+    <a class="card opt" href="/remote"><b>Remote mode (phone)</b><span>Start, pause and stop the timer, see who is up next, and view the log.</span></a>
+  </div>
+</body>
+</html>

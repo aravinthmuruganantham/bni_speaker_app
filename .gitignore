@@ -1,0 +1,28 @@
+# Files git should not track: OS junk, dependencies, secrets, local tooling output
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Environment variables and secrets (keep the template tracked)
+.env
+.env.*
+!.env.example
+
+# Vercel local project link and pulled env
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors
+.vscode/
+.idea/
+
+# Misc
+coverage/
+*.tmp

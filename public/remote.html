@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#cf2030">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/css/theme.css">
+<title>Timer Remote</title>
+<style>
+  .now { text-align: center; padding: 16px 14px 14px; }
+  .who { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 64px; text-align: left; }
+  .who .t { min-width: 0; }
+  .who .nm { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+  .who .sb { font-size: 14px; color: var(--mut); overflow-wrap: anywhere; }
+  .who.empty .nm { color: var(--mut); font-weight: 600; font-size: 17px; }
+  .slot { font-size: 13px; color: var(--mut); font-weight: 600; margin-top: 6px; }
+  .clock { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 80px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; margin: 2px 0; color: var(--gray); }
+  .now[data-phase="go"] .clock { color: var(--ink); }
+  .now[data-phase="warn"] .clock { color: #c07a00; }
+  .now[data-phase="over"] .clock { color: var(--red); }
+  .now[data-phase="over"] { border-color: var(--red); background: var(--red-l); }
+  .state { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); font-weight: 700; min-height: 16px; }
+  .ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .ctl .main { grid-column: 1 / -1; min-height: 72px; font-size: 22px; }
+
+  .next { display: flex; align-items: center; gap: 12px; }
+  .next .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--mut); font-weight: 700; }
+  .next .nm { font-weight: 700; }
+  .next .sb { font-size: 13px; color: var(--mut); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 44px; font-size: 14px; padding: 0 14px; border-radius: 99px; font-weight: 700; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: inherit; color: var(--ink); }
+  .chip small { color: var(--mut); font-weight: 500; margin-left: 6px; }
+  .chip.on { background: var(--red); border-color: var(--red); color: #fff; }
+  .chip.on small { color: #ffd9dd; }
+  .locked { opacity: .45; pointer-events: none; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > div { flex: 1; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--red); font-weight: 700; margin-top: 12px; }
+  .prow { display: grid; grid-template-columns: 1fr 60px 60px 40px; gap: 6px; margin-top: 8px; }
+  .prow input { padding: 8px; min-height: 42px; font-size: 15px; }
+  .prow button { min-height: 42px; padding: 0; font-size: 18px; }
+  .tools { display: flex; gap: 8px; margin-top: 10px; }
+
+  .li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .li:first-child { border-top: 0; }
+  .li .n { width: 22px; text-align: center; font-weight: 700; color: var(--mut); font-size: 14px; flex: none; }
+  .li .t { flex: 1; min-width: 0; }
+  .li .nm { font-weight: 700; overflow-wrap: anywhere; }
+  .li .sb { font-size: 13px; color: var(--mut); overflow-wrap: anywhere; }
+  .badge { font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 99px; background: #eee; color: var(--gray); white-space: nowrap; flex: none; }
+  .badge.live { background: var(--red); color: #fff; }
+  .badge.cur { background: var(--red-l); color: var(--red); }
+  .badge.done { background: #e4f4ea; color: var(--green); }
+  .badge.over { background: var(--red-l); color: var(--red); }
+  .li.is-cur { background: var(--red-l); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+  .empty { color: var(--mut); font-size: 14px; padding: 6px 0; }
+  .editlink { display: block; text-align: center; color: var(--red); font-weight: 700; text-decoration: none; padding: 12px; }
+
+  .le { padding: 10px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+  .le:first-of-type { border-top: 0; }
+  .le .nm { font-weight: 700; } .le .sb { color: var(--mut); font-size: 13px; }
+  .le .m { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; text-align: right; }
+  .le .m.ov { color: var(--red); } .le .m.ok { color: var(--green); }
+  .le .x { grid-column: 2; text-align: right; }
+  .le .x button { border: 0; background: none; color: var(--mut); font: 600 12px inherit; font-family: inherit; cursor: pointer; padding: 4px 6px; }
+</style>
+</head>
+<body>
+  <header class="bar">
+    <img class="logo" src="/assets/logo.png" alt="" onerror="this.remove()">
+    <h1>Timer Remote</h1>
+    <div class="conn" id="conn"><i></i><span id="connTxt">Connecting</span></div>
+  </header>
+  <nav class="tabs" id="tabs">
+    <button data-tab="timer" class="on">Timer</button>
+    <button data-tab="lineup">Lineup</button>
+    <button data-tab="log">Log</button>
+  </nav>
+
+  <div class="wrap">
+    <!-- TIMER -->
+    <section id="tab-timer">
+      <div class="card now" id="now" data-phase="idle">
+        <div class="who empty" id="who"></div>
+        <div class="slot" id="slot"></div>
+        <div class="clock" id="clock">00:00</div>
+        <div class="state" id="stateTxt"></div>
+      </div>
+      <div class="ctl">
+        <button class="btn red main" id="main">Start</button>
+        <button class="btn dark" id="stop">Stop &amp; log</button>
+        <button class="btn" id="reset">Reset</button>
+      </div>
+      <div class="card next" id="upnext" hidden></div>
+      <div class="card" id="slotCard">
+        <h2>Time slot</h2>
+        <div class="chips" id="chips"></div>
+        <label for="cTitle" style="margin-top:14px">Custom title</label>
+        <input type="text" id="cTitle" placeholder="e.g. Visitor Introduction" autocomplete="off">
+        <div class="row" style="margin-top:8px">
+          <div><label for="cMin">Minutes</label><input type="number" id="cMin" inputmode="numeric" min="0" max="180" value="1"></div>
+          <div><label for="cSec">Seconds</label><input type="number" id="cSec" inputmode="numeric" min="0" max="59" value="0"></div>
+          <button class="btn red" id="setCustom" style="min-height:46px">Set</button>
+        </div>
+        <details>
+          <summary>Edit saved slots</summary>
+          <div id="pedit"></div>
+          <div class="tools"><button class="btn small" id="addP">+ Add slot</button><button class="btn small red" id="saveP">Save slots</button></div>
+        </details>
+        <p class="note" id="lockNote" hidden>The slot is locked while a speaker is on. Stop &amp; log, or Reset, to change it.</p>
+      </div>
+    </section>
+
+    <!-- LINEUP (view only) -->
+    <section id="tab-lineup" hidden>
+      <div class="card">
+        <h2>Today's lineup</h2>
+        <div id="lineup"></div>
+        <a class="editlink" href="/lineup">Edit lineup (names, categories, photos)</a>
+      </div>
+      <div class="card">
+        <h2>Visitor / not on the list</h2>
+        <div class="row">
+          <div><input type="text" id="guest" placeholder="Visitor name" autocomplete="off" autocapitalize="words"></div>
+          <button class="btn red" id="setGuest" style="min-height:46px">Select</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section id="tab-log" hidden>
+      <div class="card">
+        <h2>Speaker log</h2>
+        <div id="log"></div>
+        <div class="tools">
+          <button class="btn small red" id="export">Export CSV</button>
+          <button class="btn small ghost" id="clearLog">Clear log (new meeting)</button>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div id="toast"></div>
+
+<script src="/js/app.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = App.esc;
+  let data = { presets: [], lineup: [], log: [] };
+  let seenRev = { lineup: -1, presets: -1, log: -1 };
+  let loading = false;
+
+  const busy = () => App.live && (App.live.status === 'running' || App.live.status === 'paused');
+  const lenText = s => { const m = Math.floor(s / 60), r = s % 60; return (m ? m + ' min' : '') + (m && r ? ' ' : '') + (r ? r + ' sec' : ''); };
+
+  // ---------- commands ----------
+  async function cmd(body) {
+    try {
+      const r = await App.admin('/api/cmd', { body });
+      const j = await r.json();
+      if (!j.ok) return App.toast(j.error || 'Failed', true);
+      App.apply(j.live);
+    } catch (e) { App.toast(e.message || 'Cannot reach the timer', true); }
+  }
+
+  async function loadData() {
+    if (loading) return; loading = true;
+    try {
+      const r = await App.admin('/api/data', { method: 'GET' });
+      const j = await r.json();
+      if (j.ok) { data = j; seenRev = Object.assign({}, App.live.rev); renderAll(); }
+      else App.toast(j.error || 'Could not load data', true);
+    } catch (e) { App.toast(e.message || 'Could not load data', true); }
+    loading = false;
+  }
+
+  // ---------- helpers ----------
+  function whoNow() {
+    const l = App.live;
+    if (l.speakerId) { const s = data.lineup.find(x => x.id === l.speakerId); if (s) return s; }
+    if (l.guest) return { id: '', name: l.guest, category: 'Visitor', company: '' };
+    return null;
+  }
+  const subOf = s => [s.category, s.company].filter(Boolean).join(' · ');
+  const doneMap = () => { const m = {}; data.log.forEach(e => { if (e.speakerId) m[e.speakerId] = e; }); return m; };
+  function nextUp() {
+    const L = data.lineup, done = doneMap(), l = App.live;
+    const i = L.findIndex(s => s.id === l.speakerId);
+    for (let k = 1; k <= L.length; k++) {
+      const s = L[(i + k + L.length) % L.length];
+      if (s.id !== l.speakerId && !done[s.id]) return s;
+    }
+    return null;
+  }
+
+  // ---------- render ----------
+  function renderNow() {
+    const l = App.live;
+    const w = whoNow();
+    const box = $('who');
+    box.className = 'who' + (w ? '' : ' empty');
+    box.innerHTML = w
+      ? App.avatar(w, 64) + '<div class="t"><div class="nm">' + esc(w.name) + '</div><div class="sb">' + esc(subOf(w)) + '</div></div>'
+      : '<div class="t"><div class="nm">No speaker selected</div></div>';
+    $('slot').textContent = l.title + '  ·  ' + lenText(Math.round(l.duration / 1000));
+    $('stateTxt').textContent = { idle: 'Ready', running: 'Running', paused: 'Paused', done: 'Finished and logged' }[l.status];
+    const main = $('main');
+    main.className = 'btn main ' + (l.status === 'running' ? 'amber' : l.status === 'done' ? 'dark' : 'red');
+    main.textContent = { idle: 'Start', running: 'Pause', paused: 'Resume', done: 'Next speaker' }[l.status];
+    $('stop').disabled = !busy();
+    $('reset').disabled = l.status === 'idle' && l.baseElapsed === 0;
+    $('slotCard').classList.toggle('locked', busy());
+    $('lockNote').hidden = !busy();
+
+    const nu = nextUp(), box2 = $('upnext');
+    if (nu && data.lineup.length > 1) {
+      box2.hidden = false;
+      box2.innerHTML = App.avatar(nu, 44) + '<div><div class="lbl">Up next</div><div class="nm">' + esc(nu.name) + '</div><div class="sb">' + esc(subOf(nu)) + '</div></div>';
+    } else box2.hidden = true;
+
+    const key = JSON.stringify([data.presets, l.title, l.duration]);
+    if (renderNow.chips !== key) {
+      renderNow.chips = key;
+      const c = $('chips'); c.innerHTML = '';
+      data.presets.forEach(function (p) {
+        const b = document.createElement('button');
+        b.className = 'chip' + (p.title === l.title && p.seconds * 1000 === l.duration ? ' on' : '');
+        b.innerHTML = esc(p.title) + '<small>' + lenText(p.seconds) + '</small>';
+        b.onclick = () => cmd({ type: 'setup', title: p.title, seconds: p.seconds });
+        c.appendChild(b);
+      });
+    }
+  }
+
+  function renderLineup() {
+    const l = App.live, done = doneMap(), box = $('lineup');
+    if (!data.lineup.length) { box.innerHTML = '<div class="empty">No lineup yet. Tap "Edit lineup" to add today\'s speakers.</div>'; return; }
+    const nu = nextUp();
+    box.innerHTML = data.lineup.map(function (s, i) {
+      const d = done[s.id], cur = s.id === l.speakerId;
+      let badge = '';
+      if (cur && busy()) badge = '<span class="badge live">Speaking</span>';
+      else if (d) { const diff = Math.round((d.usedMs - d.allowedMs) / 1000); badge = '<span class="badge ' + (diff > 0 ? 'over' : 'done') + '">' + App.mmss(d.usedMs) + (diff > 0 ? ' +' + diff + 's' : '') + '</span>'; }
+      else if (cur) badge = '<span class="badge cur">Selected</span>';
+      else if (nu && nu.id === s.id) badge = '<span class="badge">Next</span>';
+      return '<div class="li' + (cur ? ' is-cur' : '') + '" data-id="' + esc(s.id) + '"><div class="n">' + (i + 1) + '</div>' + App.avatar(s, 44) +
+        '<div class="t"><div class="nm">' + esc(s.name) + '</div><div class="sb">' + esc(subOf(s)) + '</div></div>' + badge + '</div>';
+    }).join('');
+    box.querySelectorAll('.li').forEach(el => el.onclick = () => {
+      if (busy()) return App.toast('Stop & log the current speaker first', true);
+      cmd({ type: 'select', id: el.dataset.id }); showTab('timer');
+    });
+  }
+
+  function renderLog() {
+    const box = $('log');
+    if (!data.log.length) { box.innerHTML = '<div class="empty">Nobody logged yet. Press "Stop &amp; log" when a speaker finishes.</div>'; return; }
+    box.innerHTML = data.log.slice().reverse().map(function (e) {
+      const diff = Math.round((e.usedMs - e.allowedMs) / 1000);
+      const tm = new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return '<div class="le"><div class="nm">' + esc(e.name) + '</div>' +
+        '<div class="m ' + (diff > 0 ? 'ov' : 'ok') + '">' + App.mmss(e.usedMs) + ' / ' + App.mmss(e.allowedMs) + (diff > 0 ? ' (+' + diff + 's)' : '') + '</div>' +
+        '<div class="sb">' + esc([e.category, e.company].filter(Boolean).join(' · ')) + (e.title ? ' · ' + esc(e.title) : '') + ' · ' + tm + '</div>' +
+        '<div class="x"><button data-id="' + esc(e.id) + '">Delete</button></div></div>';
+    }).join('');
+    box.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => { if (confirm('Delete this entry?')) cmd({ type: 'deleteLog', id: b.dataset.id }); });
+  }
+
+  function renderAll() { if (!App.live) return; renderNow(); renderLineup(); renderLog(); tick(); }
+  function tick() {
+    if (!App.live) return;
+    $('clock').textContent = App.fmt(App.remaining());
+    $('now').dataset.phase = App.phase();
+  }
+
+  // ---------- tabs ----------
+  function showTab(t) {
+    ['timer', 'lineup', 'log'].forEach(x => { $('tab-' + x).hidden = x !== t; });
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+  // ---------- controls ----------
+  $('main').onclick = () => { const s = App.live.status; cmd({ type: s === 'running' ? 'pause' : s === 'done' ? 'next' : 'start' }); };
+  $('stop').onclick = () => cmd({ type: 'stop' });
+  $('reset').onclick = () => { if (busy() && !confirm('Reset without logging this speaker?')) return; cmd({ type: 'reset' }); };
+  $('setCustom').onclick = function () {
+    const sec = (parseInt($('cMin').value, 10) || 0) * 60 + (parseInt($('cSec').value, 10) || 0);
+    if (sec < 1) return App.toast('Enter a time', true);
+    cmd({ type: 'setup', title: $('cTitle').value || 'Custom', seconds: sec });
+  };
+  $('setGuest').onclick = function () {
+    const g = $('guest').value.trim();
+    if (!g) return App.toast('Enter a name', true);
+    if (busy()) return App.toast('Stop & log the current speaker first', true);
+    cmd({ type: 'select', guest: g }); $('guest').value = ''; showTab('timer');
+  };
+  $('clearLog').onclick = () => { if (data.log.length && confirm('Delete the whole log? Use this to start a new meeting.')) cmd({ type: 'clearLog' }); };
+  $('export').onclick = async function () {
+    try {
+      const r = await App.admin('/api/export', { method: 'GET' });
+      const blob = await r.blob(), a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'speaker-log.csv'; document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { App.toast(e.message || 'Export failed', true); }
+  };
+
+  // saved slots editor
+  let draft = null;
+  function drawEditor() {
+    const box = $('pedit'); box.innerHTML = '';
+    draft.forEach(function (p, i) {
+      const row = document.createElement('div'); row.className = 'prow';
+      row.innerHTML = '<input type="text" value="' + esc(p.title) + '" aria-label="Title"><input type="number" inputmode="numeric" min="0" value="' + Math.floor(p.seconds / 60) + '" aria-label="Minutes"><input type="number" inputmode="numeric" min="0" max="59" value="' + (p.seconds % 60) + '" aria-label="Seconds"><button class="btn small" aria-label="Remove">&times;</button>';
+      const [t, m, s, x] = row.children;
+      const upd = () => { p.title = t.value; p.seconds = (parseInt(m.value, 10) || 0) * 60 + (parseInt(s.value, 10) || 0); };
+      t.oninput = m.oninput = s.oninput = upd;
+      x.onclick = () => { draft.splice(i, 1); drawEditor(); };
+      box.appendChild(row);
+    });
+  }
+  $('addP').onclick = () => { if (!draft) draft = data.presets.map(p => ({ ...p })); draft.push({ title: '', seconds: 60 }); drawEditor(); };
+  $('saveP').onclick = async () => { if (!draft) return App.toast('Nothing to save'); await cmd({ type: 'presets', presets: draft }); draft = null; App.toast('Slots saved'); };
+  document.querySelector('details').addEventListener('toggle', function () { if (this.open) { draft = data.presets.map(p => ({ ...p })); drawEditor(); } else draft = null; });
+
+  // ---------- wiring ----------
+  App.listeners.push(function (kind) {
+    $('conn').className = 'conn' + (App.connected ? ' ok' : '');
+    $('connTxt').textContent = App.connected ? 'Connected' : App.connected === false ? 'Reconnecting' : 'Connecting';
+    if (kind !== 'state') return;
+    const r = App.live.rev;
+    if (r.lineup !== seenRev.lineup || r.presets !== seenRev.presets || r.log !== seenRev.log) loadData();
+    renderAll();
+  });
+  App.start();
+  setInterval(tick, 100);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+})();
+</script>
+</body>
+</html>

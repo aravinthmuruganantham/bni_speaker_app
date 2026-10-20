@@ -1,0 +1,12 @@
+{
+  "name": "bni-speaker-timer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Projector countdown + phone remote + speaker lineup for BNI chapter meetings",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
